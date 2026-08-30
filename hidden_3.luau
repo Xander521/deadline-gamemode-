@@ -726,7 +726,9 @@ end
 table.insert(
 	connections,
 	chat.player_chatted:Connect(function(sender, channel, content)
-		if content:sub(1, 1) ~= "-" then
+		print("[hidden] chat from " .. tostring(sender) .. ": " .. tostring(content));
+		local first = content:sub(1, 1);
+		if first ~= "-" and first ~= "!" then
 			return;
 		end
 		local word = content:split(" ")[1]:sub(2);
@@ -735,7 +737,12 @@ table.insert(
 			return;
 		end
 		local owner = sharedvars.vip_owner;
-		if owner and sender ~= owner and not is_studio() then
+		local allowed = true;
+		if owner and not is_studio() then
+			allowed = (string.lower(tostring(sender)) == string.lower(tostring(owner)));
+		end
+		if not allowed then
+			print("[hidden] rejected: sender=" .. tostring(sender) .. " owner=" .. tostring(owner));
 			announce("host only.");
 			return;
 		end
@@ -774,10 +781,10 @@ local function cleanup()
 	shared.hidden_gamemode = nil;
 end
 
-shared.hidden_gamemode = { cleanup = cleanup, state = state, config = CFG };
+shared.hidden_gamemode = { cleanup = cleanup, state = state, config = CFG, commands = commands };
 
 pcall(gamemode.force_set_gamemode, "none");
 
 print("[hidden] loaded. map=" .. CFG.map_name .. " time=" .. tostring(CFG.map_time) .. " preset=" .. CFG.lighting_preset);
-print("[hidden] type -hstart in chat to begin, -hhelp for commands");
+print("[hidden] chat: -hstart   console: shared.hidden_gamemode.commands.hstart()");
 print("[hidden] host is: " .. tostring(sharedvars.vip_owner));
