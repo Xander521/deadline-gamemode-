@@ -2,7 +2,7 @@ local A = {};
 local ctx = nil;
 
 local alarms = {};
-local crate = { pos = nil, left = 0, tick = 0, useat = 0 };
+local crate = { pos = nil, left = 0, tick = 0, useat = 0, part = nil };
 
 local CFG = {
 	sound = "512957450",
@@ -25,8 +25,18 @@ A.init = function(c)
 	return A;
 end
 
+local function kill_crate_part()
+	if crate.part then
+		pcall(function()
+			crate.part.destroy();
+		end);
+		crate.part = nil;
+	end
+end
+
 A.reset = function()
 	alarms = {};
+	kill_crate_part();
 	crate.pos = nil;
 	crate.left = 0;
 	for _, pl in pairs(ctx.all_players()) do
@@ -136,6 +146,48 @@ A.place_crate = function(name, enforce)
 	if not ok or not pos then
 		return "no position";
 	end
+	kill_crate_part();
+	local cok, part = pcall(create_instance, "Part");
+	if cok and part then
+		local bad = "";
+		local function sp(k, f)
+			local o = pcall(f);
+			if not o then
+				bad = bad .. k .. " ";
+			end
+		end
+		sp("Size", function()
+			part.Size = Vector3.new(3, 2, 2);
+		end);
+		sp("Name", function()
+			part.Name = "ammo_crate";
+		end);
+		sp("Color", function()
+			part.Color = Color3.fromRGB(75, 85, 60);
+		end);
+		sp("Material", function()
+			part.Material = Enum.Material.Metal;
+		end);
+		sp("Position", function()
+			part.Position = pos + Vector3.new(0, 2, 0);
+		end);
+		sp("Anchored", function()
+			part.Anchored = false;
+		end);
+		sp("Density", function()
+			part.CustomPhysicalProperties = PhysicalProperties.new(0.33, 0.5, 0.3);
+		end);
+		sp("Parent", function()
+			part.Parent = get_map_root();
+		end);
+		sp("NetOwner", function()
+			part.set_network_owner(nil);
+		end);
+		crate.part = part;
+		print("[abil] crate part created" .. (bad ~= "" and (" FAILED: " .. bad) or ""));
+	else
+		print("[abil] could not create the crate part");
+	end
 	crate.pos = pos;
 	crate.left = CFG.crate_charges;
 	crate.tick = 0;
@@ -176,6 +228,7 @@ A.use_crate = function(name)
 	end
 	pcall(p.fire_client, "note:RESUPPLIED  (" .. tostring(crate.left) .. " left)");
 	if crate.left <= 0 then
+		kill_crate_part();
 		crate.pos = nil;
 		for _, pl in pairs(ctx.all_players()) do
 			pcall(pl.fire_client, "crateoff");
@@ -231,6 +284,14 @@ A.tick = function(dt, hunter_pos, hunter_name)
 		crate.tick = crate.tick - dt;
 		if crate.tick <= 0 then
 			crate.tick = 0.5;
+			if crate.part then
+				local pok, ppos = pcall(function()
+					return crate.part.Position;
+				end);
+				if pok and ppos then
+					crate.pos = ppos;
+				end
+			end
 			local msg = string.format("cratepos:%.1f,%.1f,%.1f:%d", crate.pos.X, crate.pos.Y, crate.pos.Z, crate.left);
 			for _, pl in pairs(ctx.all_players()) do
 				pcall(pl.fire_client, msg);
